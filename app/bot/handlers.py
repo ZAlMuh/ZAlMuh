@@ -12,6 +12,7 @@ from app.external.cache import redis_cache
 from app.utils.validation import ValidationUtils, RateLimitUtils
 from app.database.models import UserSession
 from datetime import datetime
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +121,10 @@ class BotHandlers:
                 await self._handle_name_input(update, text)
             elif current_state == "waiting_examno":
                 await self._handle_examno_input(update, text)
+            elif current_state == "waiting_broadcast" and self._is_admin(user.id):
+                await self._handle_broadcast_message(update, text)
+            elif current_state == "waiting_broadcast_confirm" and self._is_admin(user.id):
+                await self._handle_broadcast_confirm(update, text)
             else:
                 # Default: show main menu
                 await update.message.reply_text(
@@ -130,6 +135,301 @@ class BotHandlers:
         except Exception as e:
             logger.error(f"Error in text message handler: {e}")
             await self._send_error_message(update)
+
+    async def admin_status_command(self, update: Update, context) -> None:
+        """Admin command to get bot status and statistics"""
+        try:
+            user = update.effective_user
+            
+            # Check if user is admin
+            if not self._is_admin(user.id):
+                await update.message.reply_text("❌ غير مصرح لك بالوصول لهذا الأمر")
+                return
+            
+            logger.info(f"Admin status command from user {user.id}")
+            
+            # Get bot statistics
+            bot_stats = await self._get_admin_statistics()
+            
+            await update.message.reply_text(bot_stats, parse_mode='HTML')
+            
+        except Exception as e:
+            logger.error(f"Error in admin status command: {e}")
+            await update.message.reply_text("❌ خطأ في جلب الإحصائيات")
+
+    async def admin_broadcast_command(self, update: Update, context) -> None:
+        """Admin command to start broadcast process"""
+        try:
+            user = update.effective_user
+            
+            # Check if user is admin
+            if not self._is_admin(user.id):
+                await update.message.reply_text("❌ غير مصرح لك بالوصول لهذا الأمر")
+                return
+            
+            logger.info(f"Admin broadcast command from user {user.id}")
+            
+            # Set state to waiting for broadcast message
+            self._save_user_session(user.id, "waiting_broadcast")
+            
+            await update.message.reply_text(
+                "📢 <b>إرسال رسالة جماعية</b>\n\n"
+                "✍️ اكتب الرسالة التي تريد إرسالها لجميع المستخدمين:\n\n"
+                "💡 يمكنك استخدام HTML للتنسيق:\n"
+                "• <b>نص عريض</b>\n"
+                "• <i>نص مائل</i>\n"
+                "• <code>كود</code>\n\n"
+                "❌ اكتب /cancel للإلغاء",
+                parse_mode='HTML'
+            )
+            
+        except Exception as e:
+            logger.error(f"Error in admin broadcast command: {e}")
+            await update.message.reply_text("❌ خطأ في أمر البث")
+
+    async def _handle_broadcast_message(self, update: Update, message_text: str) -> None:
+        """Handle broadcast message from admin"""
+        try:
+            user_id = update.effective_user.id
+            
+            if message_text.strip().lower() == '/cancel':
+                self._save_user_session(user_id, "main_menu")
+                await update.message.reply_text("❌ تم إلغاء البث الجماعي")
+                return
+            
+            # Confirm broadcast
+            confirm_text = (
+                f"📢 <b>تأكيد البث الجماعي</b>\n\n"
+                f"📝 <b>الرسالة:</b>\n{message_text}\n\n"
+                f"👥 سيتم إرسالها لجميع المستخدمين المسجلين\n\n"
+                f"✅ اكتب 'تأكيد' للإرسال\n"
+                f"❌ اكتب 'إلغاء' للإلغاء"
+            )
+            
+            # Save broadcast message in session
+            self._save_user_session(
+                user_id, 
+                "waiting_broadcast_confirm", 
+                {"broadcast_message": message_text}
+            )
+            
+            await update.message.reply_text(confirm_text, parse_mode='HTML')
+            
+        except Exception as e:
+            logger.error(f"Error handling broadcast message: {e}")
+            await update.message.reply_text("❌ خطأ في معالجة رسالة البث")
+
+    async def _handle_broadcast_confirm(self, update: Update, confirmation_text: str) -> None:
+        """Handle broadcast confirmation from admin"""
+        try:
+            user_id = update.effective_user.id
+            
+            if confirmation_text.strip() in ['إلغاء', 'الغاء', 'cancel']:
+                self._save_user_session(user_id, "main_menu")
+                await update.message.reply_text("❌ تم إلغاء البث الجماعي")
+                return
+            
+            if confirmation_text.strip() not in ['تأكيد', 'تاكيد', 'موافق', 'نعم', 'confirm']:
+                await update.message.reply_text(
+                    "❌ يرجى كتابة 'تأكيد' للإرسال أو 'إلغاء' للإلغاء"
+                )
+                return
+            
+            # Get broadcast message from session
+            session = supabase_client.get_user_session(user_id)
+            if not session or not session.search_history or not session.search_history.get("broadcast_message"):
+                await update.message.reply_text("❌ خطأ: لم يتم العثور على الرسالة")
+                return
+            
+            broadcast_message = session.search_history["broadcast_message"]
+            
+            # Start broadcast
+            status_msg = await update.message.reply_text("🚀 جاري البث الجماعي...")
+            
+            # Execute broadcast
+            result = await self._execute_broadcast(broadcast_message)
+            
+            # Reset session
+            self._save_user_session(user_id, "main_menu")
+            
+            # Send result
+            await status_msg.edit_text(
+                f"✅ <b>تم البث الجماعي بنجاح</b>\n\n"
+                f"📊 <b>الإحصائيات:</b>\n"
+                f"✅ تم الإرسال: {result['sent']}\n"
+                f"❌ فشل: {result['failed']}\n"
+                f"⏱️ الوقت المستغرق: {result['duration']:.1f} ثانية",
+                parse_mode='HTML'
+            )
+            
+        except Exception as e:
+            logger.error(f"Error handling broadcast confirmation: {e}")
+            await update.message.reply_text("❌ خطأ في تأكيد البث")
+
+    def _is_admin(self, user_id: int) -> bool:
+        """Check if user is admin"""
+        return user_id in settings.admin_user_ids
+
+    async def _get_admin_statistics(self) -> str:
+        """Get comprehensive bot statistics for admins"""
+        try:
+            # Get bot manager stats
+            if self.bot_manager:
+                bot_stats = await self.bot_manager.get_stats()
+            else:
+                bot_stats = {"error": "Bot manager not available"}
+            
+            # Get Redis stats
+            try:
+                redis_info = await redis_cache.redis.info() if redis_cache.redis else {}
+                redis_status = "🟢 متصل" if redis_cache.redis else "🔴 غير متصل"
+                redis_memory = redis_info.get('used_memory_human', 'غير معروف')
+            except Exception:
+                redis_status = "🔴 خطأ"
+                redis_memory = "غير معروف"
+            
+            # Get database stats
+            try:
+                # Get total users count
+                users_result = supabase_client.client.table("user_sessions").select("user_id", count="exact").execute()
+                total_users = users_result.count if users_result.count else 0
+                
+                # Get today's active users
+                today = datetime.now().date()
+                active_today_result = supabase_client.client.table("user_sessions").select(
+                    "user_id", count="exact"
+                ).gte("created_at", today.isoformat()).execute()
+                active_today = active_today_result.count if active_today_result.count else 0
+                
+                db_status = "🟢 متصل"
+            except Exception as e:
+                total_users = "خطأ"
+                active_today = "خطأ"
+                db_status = f"🔴 خطأ: {str(e)[:50]}"
+            
+            # Build status message
+            status_message = f"""
+📊 <b>إحصائيات البوت - لوحة الإدارة</b>
+
+🤖 <b>حالة البوتات:</b>
+• الوضع: {bot_stats.get('mode', 'غير معروف')}
+• البوتات النشطة: {bot_stats.get('active_shards', 0)}
+• إجمالي السعة: {bot_stats.get('total_capacity_per_second', 'غير معروف')} رسالة/ثانية
+
+👥 <b>المستخدمين:</b>
+• إجمالي المستخدمين: {total_users}
+• نشط اليوم: {active_today}
+
+💾 <b>قاعدة البيانات:</b>
+• الحالة: {db_status}
+• النوع: Supabase PostgreSQL
+
+🔄 <b>التخزين المؤقت (Redis):</b>
+• الحالة: {redis_status}
+• الذاكرة المستخدمة: {redis_memory}
+
+⚙️ <b>النظام:</b>
+• البيئة: {settings.environment}
+• مستوى السجلات: {settings.log_level}
+• الحد الأقصى للطلبات: {settings.max_requests_per_minute}/دقيقة
+
+📢 <b>القناة الإجبارية:</b>
+• الاسم: {settings.required_channel_title}
+• المعرف: {settings.required_channel_username}
+
+⏰ <b>وقت الاستعلام:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+"""
+            
+            return status_message.strip()
+            
+        except Exception as e:
+            logger.error(f"Error getting admin statistics: {e}")
+            return f"❌ خطأ في جلب الإحصائيات: {str(e)}"
+
+    async def _execute_broadcast(self, message: str) -> dict:
+        """Execute broadcast message to all users"""
+        start_time = time.time()
+        sent_count = 0
+        failed_count = 0
+        
+        try:
+            # Get all user IDs from database
+            users_result = supabase_client.client.table("user_sessions").select("user_id").execute()
+            
+            if not users_result.data:
+                return {"sent": 0, "failed": 0, "duration": 0}
+            
+            user_ids = [user["user_id"] for user in users_result.data]
+            logger.info(f"Starting broadcast to {len(user_ids)} users")
+            
+            # Send to users in batches to avoid rate limits
+            batch_size = 30  # Telegram rate limit
+            for i in range(0, len(user_ids), batch_size):
+                batch = user_ids[i:i + batch_size]
+                
+                # Send to each user in batch
+                tasks = []
+                for user_id in batch:
+                    task = self._send_broadcast_message(user_id, message)
+                    tasks.append(task)
+                
+                # Execute batch
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                
+                # Count results
+                for result in results:
+                    if isinstance(result, Exception):
+                        failed_count += 1
+                    else:
+                        sent_count += 1
+                
+                # Small delay between batches
+                await asyncio.sleep(1)
+            
+            duration = time.time() - start_time
+            logger.info(f"Broadcast completed: {sent_count} sent, {failed_count} failed, {duration:.1f}s")
+            
+            return {
+                "sent": sent_count,
+                "failed": failed_count,
+                "duration": duration
+            }
+            
+        except Exception as e:
+            logger.error(f"Error executing broadcast: {e}")
+            duration = time.time() - start_time
+            return {
+                "sent": sent_count,
+                "failed": failed_count,
+                "duration": duration
+            }
+
+    async def _send_broadcast_message(self, user_id: int, message: str) -> bool:
+        """Send broadcast message to individual user"""
+        try:
+            # Get bot instance for sending
+            if self.bot_manager and hasattr(self.bot_manager, 'main_application'):
+                # Single interface mode
+                bot = self.bot_manager.main_application.bot
+            elif self.bot_manager and hasattr(self.bot_manager, 'active_bots') and self.bot_manager.active_bots:
+                # Multi-bot mode
+                bot = self.bot_manager.active_bots[0]
+            elif self.application:
+                # Fallback
+                bot = self.application.bot
+            else:
+                raise Exception("No bot available for broadcast")
+            
+            await bot.send_message(
+                chat_id=user_id,
+                text=message,
+                parse_mode='HTML'
+            )
+            return True
+            
+        except Exception as e:
+            logger.debug(f"Failed to send broadcast to user {user_id}: {e}")
+            return False
     
     async def _show_main_menu(self, query) -> None:
         """Show main menu"""
@@ -638,6 +938,8 @@ class TelegramBotManager:
             
             # Add handlers
             application.add_handler(CommandHandler("start", handlers.start_command))
+            application.add_handler(CommandHandler("admin_status", handlers.admin_status_command))
+            application.add_handler(CommandHandler("admin_broadcast", handlers.admin_broadcast_command))
             application.add_handler(CallbackQueryHandler(handlers.button_callback))
             application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.text_message))
             

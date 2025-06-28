@@ -51,6 +51,12 @@ class Settings(BaseSettings):
     required_channel_username: str = os.getenv("REQUIRED_CHANNEL_USERNAME", "@daralaarji")
     required_channel_title: str = os.getenv("REQUIRED_CHANNEL_TITLE", "دار الاعرجي")
     
+    # Admin Configuration
+    admin_user_ids: List[int] = [
+        int(os.getenv("ADMIN_USER_1", "1310526240")),
+        int(os.getenv("ADMIN_USER_2", "5368597099")),
+    ]
+    
     # Environment
     environment: str = os.getenv("ENVIRONMENT", "development")
     log_level: str = os.getenv("LOG_LEVEL", "INFO")

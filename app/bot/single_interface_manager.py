@@ -62,6 +62,8 @@ class SingleInterfaceBotManager:
             
             # Add handlers to main application
             self.main_application.add_handler(CommandHandler("start", self.handlers.start_command))
+            self.main_application.add_handler(CommandHandler("admin_status", self.handlers.admin_status_command))
+            self.main_application.add_handler(CommandHandler("admin_broadcast", self.handlers.admin_broadcast_command))
             self.main_application.add_handler(CallbackQueryHandler(self.handlers.button_callback))
             self.main_application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handlers.text_message))
             
