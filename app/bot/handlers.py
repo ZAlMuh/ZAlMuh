@@ -187,6 +187,8 @@ class BotHandlers:
         user_id = update.effective_user.id
         session = supabase_client.get_user_session(user_id)
         
+        logger.info(f"Name search for user {user_id}: session={session}, history={session.search_history if session else None}")
+        
         if not session or not session.search_history or not session.search_history.get("selected_governorate"):
             await update.message.reply_text(
                 "❌ لم يتم اختيار المحافظة. يرجى البدء من جديد",
@@ -197,9 +199,12 @@ class BotHandlers:
         selected_governorate = session.search_history["selected_governorate"]
         
         # Search for students in the selected governorate
+        logger.info(f"Searching for name='{clean_name}' in governorate='{selected_governorate}'")
         search_result = supabase_client.search_students_by_name(
             clean_name, selected_governorate, limit=5
         )
+        
+        logger.info(f"Search result: {len(search_result.students)} students found")
         
         if not search_result.students:
             await update.message.reply_text(

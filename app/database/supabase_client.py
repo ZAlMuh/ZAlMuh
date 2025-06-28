@@ -24,6 +24,7 @@ class SupabaseClient:
     ) -> SearchResult:
         """Search students by name with optional governorate filter"""
         try:
+            logger.info(f"DB search: name='{name}', governorate='{governorate}'")
             query = self.client.table("students").select("*")
             
             # Case-insensitive name search using aname field
@@ -35,11 +36,13 @@ class SupabaseClient:
             # Get total count first
             count_result = query.execute()
             total_count = len(count_result.data) if count_result.data else 0
+            logger.info(f"DB search: found {total_count} total results")
             
             # Get paginated results
             result = query.range(offset, offset + limit - 1).execute()
             
             students = [Student(**student) for student in result.data] if result.data else []
+            logger.info(f"DB search: returning {len(students)} students")
             
             return SearchResult(
                 students=students,
