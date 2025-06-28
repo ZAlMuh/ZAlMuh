@@ -96,11 +96,18 @@ class RedisCache:
         
         try:
             key = f"rate_limit:{user_id}"
-            pipeline = self.redis.pipeline()
-            pipeline.incr(key)
-            pipeline.expire(key, 60)  # 1 minute window
-            results = await pipeline.execute()
-            return results[0] if results else 1
+            
+            # Check if key exists
+            exists = await self.redis.exists(key)
+            
+            # Increment the counter
+            count = await self.redis.incr(key)
+            
+            # Only set expiration if this is the first request in the window
+            if not exists:
+                await self.redis.expire(key, 60)  # 1 minute window
+            
+            return count
         except Exception as e:
             logger.error(f"Error incrementing rate limit for user {user_id}: {e}")
             return 1

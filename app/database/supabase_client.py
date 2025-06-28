@@ -15,7 +15,7 @@ class SupabaseClient:
             settings.supabase_key
         )
 
-    async def search_students_by_name(
+    def search_students_by_name(
         self, 
         name: str, 
         governorate: Optional[str] = None,
@@ -51,7 +51,7 @@ class SupabaseClient:
             logger.error(f"Error searching students: {e}")
             return SearchResult(students=[], total_count=0, has_more=False)
 
-    async def get_student_by_examno(self, examno: str) -> Optional[Student]:
+    def get_student_by_examno(self, examno: str) -> Optional[Student]:
         """Get student by exam number"""
         try:
             result = self.client.table("students").select("*").eq("examno", examno).execute()
@@ -64,7 +64,7 @@ class SupabaseClient:
             logger.error(f"Error getting student by examno: {e}")
             return None
 
-    async def get_governorates(self) -> List[str]:
+    def get_governorates(self) -> List[str]:
         """Get list of unique governorates"""
         try:
             result = self.client.table("students").select("gov_name").execute()
@@ -76,15 +76,24 @@ class SupabaseClient:
             logger.error(f"Error getting governorates: {e}")
             return []
 
-    async def save_user_session(self, user_session: UserSession) -> bool:
+    def save_user_session(self, user_session: UserSession) -> bool:
         """Save or update user session"""
         try:
-            result = self.client.table("user_sessions").upsert({
-                "user_id": user_session.user_id,
+            # Try to update first
+            result = self.client.table("user_sessions").update({
                 "current_state": user_session.current_state,
                 "search_history": user_session.search_history,
                 "created_at": user_session.created_at.isoformat() if user_session.created_at else None
-            }).execute()
+            }).eq("user_id", user_session.user_id).execute()
+            
+            # If no rows updated, insert new
+            if not result.data:
+                result = self.client.table("user_sessions").insert({
+                    "user_id": user_session.user_id,
+                    "current_state": user_session.current_state,
+                    "search_history": user_session.search_history,
+                    "created_at": user_session.created_at.isoformat() if user_session.created_at else None
+                }).execute()
             
             return bool(result.data)
             
@@ -92,7 +101,7 @@ class SupabaseClient:
             logger.error(f"Error saving user session: {e}")
             return False
 
-    async def get_user_session(self, user_id: int) -> Optional[UserSession]:
+    def get_user_session(self, user_id: int) -> Optional[UserSession]:
         """Get user session by user ID"""
         try:
             result = self.client.table("user_sessions").select("*").eq("user_id", user_id).execute()
@@ -135,7 +144,7 @@ class SupabaseClient:
             logger.error(f"Error getting rate limit: {e}")
             return None
 
-    async def get_exam_result(self, examno: str) -> Optional['ExamResult']:
+    def get_exam_result(self, examno: str) -> Optional['ExamResult']:
         """Get exam result by exam number"""
         try:
             result = self.client.table("exam_results").select("*").eq("examno", examno).execute()
@@ -149,16 +158,16 @@ class SupabaseClient:
             logger.error(f"Error getting exam result: {e}")
             return None
 
-    async def get_student_with_result(self, examno: str) -> Optional[Dict[str, Any]]:
+    def get_student_with_result(self, examno: str) -> Optional[Dict[str, Any]]:
         """Get student information along with exam results"""
         try:
             # Get student info
-            student = await self.get_student_by_examno(examno)
+            student = self.get_student_by_examno(examno)
             if not student:
                 return None
             
             # Get exam results
-            exam_result = await self.get_exam_result(examno)
+            exam_result = self.get_exam_result(examno)
             
             return {
                 "student": student,

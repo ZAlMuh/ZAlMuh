@@ -102,7 +102,7 @@ class BotHandlers:
                 return
             
             # Get user session to determine current state
-            session = await supabase_client.get_user_session(user.id)
+            session = supabase_client.get_user_session(user.id)
             current_state = session.current_state if session else "main_menu"
             
             # Handle based on current state
@@ -130,11 +130,22 @@ class BotHandlers:
         )
     
     async def _start_name_search(self, query) -> None:
-        """Start name search process"""
-        await self._save_user_session(query.from_user.id, "waiting_name")
+        """Start name search process - first show governorates"""
+        # Get governorates for selection
+        governorates = supabase_client.get_governorates()
+        if not governorates:
+            await query.edit_message_text(
+                self.messages.DATABASE_ERROR,
+                reply_markup=self.keyboards.main_menu()
+            )
+            return
+        
+        # Set state to waiting for governorate selection
+        self._save_user_session(query.from_user.id, "waiting_governorate")
+        
         await query.edit_message_text(
-            self.messages.NAME_SEARCH_PROMPT,
-            reply_markup=self.keyboards.back_to_main_keyboard()
+            "🏛️ اختر المحافظة أولاً لتقليل النتائج المكررة:",
+            reply_markup=self.keyboards.governorate_selection(governorates)
         )
     
     async def _start_examno_search(self, query) -> None:
@@ -164,33 +175,81 @@ class BotHandlers:
             )
             return
         
-        # Get governorates for selection
-        governorates = await supabase_client.get_governorates()
-        if not governorates:
+        # Get selected governorate from session
+        user_id = update.effective_user.id
+        session = supabase_client.get_user_session(user_id)
+        
+        if not session or not session.search_history or not session.search_history.get("selected_governorate"):
             await update.message.reply_text(
-                self.messages.DATABASE_ERROR,
+                "❌ لم يتم اختيار المحافظة. يرجى البدء من جديد",
+                reply_markup=self.keyboards.main_menu()
+            )
+            return
+        
+        selected_governorate = session.search_history["selected_governorate"]
+        
+        # Search for students in the selected governorate
+        search_result = supabase_client.search_students_by_name(
+            clean_name, selected_governorate, limit=5
+        )
+        
+        if not search_result.students:
+            await update.message.reply_text(
+                f"❌ لم يتم العثور على طلاب بالاسم '{clean_name}' في محافظة {selected_governorate}",
                 reply_markup=self.keyboards.back_to_main_keyboard()
             )
             return
         
-        # Save search term in session
-        await self._save_user_session(
-            update.effective_user.id, 
-            "waiting_governorate",
-            {"search_name": clean_name}
-        )
+        if len(search_result.students) == 1:
+            # Single result: show directly
+            student = search_result.students[0]
+            # For direct message response, we need a different approach
+            # Show student result via message instead of callback
+            await self._show_student_result_message(update, student.examno)
+        else:
+            # Multiple results: show selection
+            result_text = f"🔍 نتائج البحث عن '{clean_name}' في {selected_governorate}:\n\n"
+            
+            for i, student in enumerate(search_result.students, 1):
+                result_text += f"{i}. {student.aname}\n"
+                result_text += f"   📚 المدرسة: {student.sch_name or 'غير محدد'}\n"
+                result_text += f"   🆔 رقم الجلوس: {student.examno}\n\n"
+            
+            if search_result.has_more:
+                result_text += f"📝 يوجد المزيد من النتائج ({search_result.total_count} إجمالي)"
+            
+            await update.message.reply_text(
+                result_text,
+                reply_markup=self.keyboards.student_selection(search_result.students)
+            )
         
-        await update.message.reply_text(
-            self.messages.GOVERNORATE_SELECT_PROMPT,
-            reply_markup=self.keyboards.governorates_keyboard(governorates)
-        )
+        # Reset session state
+        self._save_user_session(update.effective_user.id, "main_menu")
     
     async def _handle_governorate_selection(self, query, gov_name: str) -> None:
         """Handle governorate selection for name search"""
         user_id = query.from_user.id
         
-        # Get session to retrieve search name
-        session = await supabase_client.get_user_session(user_id)
+        # Get session to check current state
+        session = supabase_client.get_user_session(user_id)
+        current_state = session.current_state if session else "main_menu"
+        
+        if current_state == "waiting_governorate":
+            # Save selected governorate and prompt for name
+            self._save_user_session(
+                user_id, 
+                "waiting_name", 
+                {"selected_governorate": gov_name}
+            )
+            
+            await query.edit_message_text(
+                f"🏛️ تم اختيار محافظة: {gov_name}\n\n"
+                f"✍️ الآن أدخل الاسم الذي تريد البحث عنه:",
+                reply_markup=self.keyboards.back_to_main_keyboard()
+            )
+            return
+        
+        # Legacy flow - if we have search_name already
         if not session or not session.search_history:
             await query.edit_message_text(
                 "❌ انتهت جلسة البحث. يرجى البدء من جديد",
@@ -207,7 +266,7 @@ class BotHandlers:
             return
         
         # Search for students
-        search_result = await supabase_client.search_students_by_name(
+        search_result = supabase_client.search_students_by_name(
             search_name, gov_name, limit=5
         )
         
@@ -343,6 +402,37 @@ class BotHandlers:
             logger.error(f"Error checking rate limit: {e}")
             return True  # Allow on error
     
+    async def _show_student_result_message(self, update: Update, examno: str) -> None:
+        """Show student result via message (not callback)"""
+        try:
+            # This is a copy of _show_student_result but for message responses
+            student_data = supabase_client.get_student_with_result(examno)
+            
+            if not student_data:
+                await update.message.reply_text(
+                    self.messages.NO_RESULTS_FOUND,
+                    reply_markup=self.keyboards.back_to_main_keyboard()
+                )
+                return
+            
+            student = Student(**student_data['student'])
+            exam_result = student_data.get('exam_result')
+            
+            # Format result message
+            result_text = self.messages.format_student_result(student, exam_result)
+            
+            await update.message.reply_text(
+                result_text,
+                reply_markup=self.keyboards.result_actions_keyboard(examno)
+            )
+            
+        except Exception as e:
+            logger.error(f"Error showing student result message: {e}")
+            await update.message.reply_text(
+                self.messages.SYSTEM_ERROR,
+                reply_markup=self.keyboards.back_to_main_keyboard()
+            )
+
     async def _save_user_session(self, user_id: int, state: str, history: dict = None) -> None:
         """Save user session state"""
         try:
@@ -352,7 +442,7 @@ class BotHandlers:
                 search_history=history,
                 created_at=datetime.now()
             )
-            await supabase_client.save_user_session(session)
+            supabase_client.save_user_session(session)
         except Exception as e:
             logger.error(f"Error saving user session: {e}")
     
