@@ -26,6 +26,13 @@ class SingleInterfaceBotManager:
         self.handlers = None
         self.primary_token = settings.get_primary_token()
         self.all_tokens = settings.active_bot_tokens
+    
+    @property
+    def active_bots(self) -> List[Bot]:
+        """Compatibility property for handlers - returns main bot in a list"""
+        if self.main_application and self.main_application.bot:
+            return [self.main_application.bot]
+        return []
         
     async def initialize(self) -> None:
         """Initialize the single interface bot system"""
@@ -51,7 +58,7 @@ class SingleInterfaceBotManager:
             self.main_application = Application.builder().token(self.primary_token).build()
             
             # Create handlers
-            self.handlers = BotHandlers(0, self)  # Pass self for response routing
+            self.handlers = BotHandlers(0, bot_manager=self, application=self.main_application)  # Pass self for response routing
             
             # Add handlers to main application
             self.main_application.add_handler(CommandHandler("start", self.handlers.start_command))

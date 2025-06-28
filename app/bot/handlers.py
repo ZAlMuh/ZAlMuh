@@ -482,10 +482,13 @@ class BotHandlers:
             # Get the bot instance to check membership
             bot = None
             
-            # Try to get bot from bot_manager first
+            # Try to get bot from bot_manager first (TelegramBotManager)
             if self.bot_manager and hasattr(self.bot_manager, 'active_bots') and self.bot_manager.active_bots:
                 bot = self.bot_manager.active_bots[0]
-            # Try to get bot from bot_manager applications
+            # Try to get bot from SingleInterfaceBotManager main application
+            elif self.bot_manager and hasattr(self.bot_manager, 'main_application') and self.bot_manager.main_application:
+                bot = self.bot_manager.main_application.bot
+            # Try to get bot from bot_manager applications (TelegramBotManager)
             elif self.bot_manager and hasattr(self.bot_manager, 'applications') and self.bot_manager.applications:
                 first_app = next(iter(self.bot_manager.applications.values()))
                 bot = first_app.bot
