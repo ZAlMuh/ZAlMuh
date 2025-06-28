@@ -145,7 +145,7 @@ class BotHandlers:
         
         await query.edit_message_text(
             "🏛️ اختر المحافظة أولاً لتقليل النتائج المكررة:",
-            reply_markup=self.keyboards.governorate_selection(governorates)
+            reply_markup=self.keyboards.governorates_keyboard(governorates)
         )
     
     async def _start_examno_search(self, query) -> None:
@@ -220,7 +220,7 @@ class BotHandlers:
             
             await update.message.reply_text(
                 result_text,
-                reply_markup=self.keyboards.student_selection(search_result.students)
+                reply_markup=self.keyboards.student_results_keyboard(search_result.students)
             )
         
         # Reset session state
@@ -307,7 +307,7 @@ class BotHandlers:
         await query.edit_message_text("🔍 جاري البحث عن النتيجة...")
         
         # Get student and result from database first
-        student_data = await supabase_client.get_student_with_result(examno)
+        student_data = supabase_client.get_student_with_result(examno)
         
         if not student_data or not student_data["student"]:
             await query.edit_message_text(
@@ -344,7 +344,7 @@ class BotHandlers:
         loading_msg = await update.message.reply_text("🔍 جاري البحث عن النتيجة...")
         
         # Get student and result from database first
-        student_data = await supabase_client.get_student_with_result(examno)
+        student_data = supabase_client.get_student_with_result(examno)
         
         if not student_data or not student_data["student"]:
             await loading_msg.edit_text(
@@ -378,7 +378,7 @@ class BotHandlers:
     async def _share_result(self, query, examno: str) -> None:
         """Handle result sharing"""
         # Get student info for sharing
-        student = await supabase_client.get_student_by_examno(examno)
+        student = supabase_client.get_student_by_examno(examno)
         if not student:
             await query.answer("❌ خطأ في مشاركة النتيجة", show_alert=True)
             return
