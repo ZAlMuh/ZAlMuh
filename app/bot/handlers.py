@@ -19,11 +19,12 @@ logger = logging.getLogger(__name__)
 class BotHandlers:
     """Bot command and callback handlers"""
     
-    def __init__(self, shard_id: int, bot_manager=None):
+    def __init__(self, shard_id: int, bot_manager=None, application=None):
         self.shard_id = shard_id
         self.messages = ArabicMessages()
         self.keyboards = ArabicKeyboards()
         self.bot_manager = bot_manager  # For single interface mode
+        self.application = application  # Direct reference to application
     
     async def start_command(self, update: Update, context) -> None:
         """Handle /start command"""
@@ -479,15 +480,22 @@ class BotHandlers:
         """Check if user is subscribed to required channel"""
         try:
             # Get the bot instance to check membership
+            bot = None
+            
+            # Try to get bot from bot_manager first
             if self.bot_manager and hasattr(self.bot_manager, 'active_bots') and self.bot_manager.active_bots:
                 bot = self.bot_manager.active_bots[0]
-            else:
-                # Fallback: get bot from application
-                if hasattr(self, 'application') and self.application:
-                    bot = self.application.bot
-                else:
-                    logger.warning(f"No bot instance available for subscription check for user {user_id}")
-                    return True  # Allow access if we can't check
+            # Try to get bot from bot_manager applications
+            elif self.bot_manager and hasattr(self.bot_manager, 'applications') and self.bot_manager.applications:
+                first_app = next(iter(self.bot_manager.applications.values()))
+                bot = first_app.bot
+            # Fallback: get bot from application if available
+            elif hasattr(self, 'application') and self.application:
+                bot = self.application.bot
+            
+            if not bot:
+                logger.warning(f"No bot instance available for subscription check for user {user_id}")
+                return True  # Allow access if we can't check
             
             # Check if user is member of the required channel
             try:
@@ -623,7 +631,7 @@ class TelegramBotManager:
             application = Application.builder().token(token).build()
             
             # Create handlers for this shard
-            handlers = BotHandlers(shard_id, bot_manager=self)
+            handlers = BotHandlers(shard_id, bot_manager=self, application=application)
             
             # Add handlers
             application.add_handler(CommandHandler("start", handlers.start_command))
