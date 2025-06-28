@@ -1,7 +1,7 @@
 import logging
 import asyncio
 from typing import Dict, List, Optional
-from telegram import Update, Bot
+from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 from app.config import settings
 from app.bot.messages import ArabicMessages
@@ -57,10 +57,11 @@ class BotHandlers:
             
             logger.info(f"Callback from user {user.id}: {data}")
             
-            # Check rate limit
-            if not await self._check_rate_limit(user.id):
-                await query.answer(self.messages.RATE_LIMIT_EXCEEDED, show_alert=True)
-                return
+            # Only check rate limit for actual searches, not menu navigation
+            if data in ["search_name", "search_examno"] or data.startswith("select_student_"):
+                if not await self._check_rate_limit(user.id):
+                    await query.answer(self.messages.RATE_LIMIT_EXCEEDED, show_alert=True)
+                    return
             
             await query.answer()
             
@@ -100,17 +101,18 @@ class BotHandlers:
             
             logger.info(f"Text message from user {user.id}: {text[:50]}...")
             
-            # Check rate limit
-            if not await self._check_rate_limit(user.id):
-                await update.message.reply_text(
-                    self.messages.RATE_LIMIT_EXCEEDED,
-                    reply_markup=self.keyboards.back_to_main_keyboard()
-                )
-                return
-            
             # Get user session to determine current state
             session = supabase_client.get_user_session(user.id)
             current_state = session.current_state if session else "main_menu"
+            
+            # Only check rate limit for actual search inputs, not menu navigation
+            if current_state in ["waiting_name", "waiting_examno"]:
+                if not await self._check_rate_limit(user.id):
+                    await update.message.reply_text(
+                        self.messages.RATE_LIMIT_EXCEEDED,
+                        reply_markup=self.keyboards.back_to_main_keyboard()
+                    )
+                    return
             
             # Handle based on current state
             if current_state == "waiting_name":
@@ -428,11 +430,11 @@ class BotHandlers:
                 )
                 return
             
-            student = Student(**student_data['student'])
+            student = student_data['student']
             exam_result = student_data.get('exam_result')
             
             # Format result message
-            result_text = self.messages.format_student_result(student, exam_result)
+            result_text = self.messages.format_exam_result(student, exam_result)
             
             await update.message.reply_text(
                 result_text,
@@ -481,46 +483,9 @@ class BotHandlers:
 
     async def _check_channel_subscription(self, user_id: int) -> bool:
         """Check if user is subscribed to required channel"""
-        try:
-            if self.bot_manager:
-                # Single interface mode - use primary bot
-                bot = await self.bot_manager.get_response_bot(user_id)
-            else:
-                # Traditional mode - use context bot
-                from telegram.ext import ContextTypes
-                bot = ContextTypes.DEFAULT_TYPE.bot
-            
-            # First check if bot is admin in the channel
-            try:
-                # Get bot info to get the ID
-                bot_info = await bot.get_me()
-                bot_member = await bot.get_chat_member(settings.required_channel_id, bot_info.id)
-                if bot_member.status not in ['creator', 'administrator']:
-                    logger.warning(f"⚠️ Bot is not admin in channel {settings.required_channel_id}")
-            except Exception as admin_check_error:
-                logger.error(f"❌ Cannot check bot admin status: {admin_check_error}")
-                return True  # Allow access if can't check bot status
-            
-            # Check if user is member of the channel
-            member = await bot.get_chat_member(settings.required_channel_id, user_id)
-            
-            # Member status: 'creator', 'administrator', 'member' = subscribed
-            # 'left', 'kicked' = not subscribed
-            if member.status in ['left', 'kicked']:
-                logger.info(f"User {user_id} not subscribed to channel (status: {member.status})")
-                return False
-            
-            logger.info(f"User {user_id} is subscribed to channel (status: {member.status})")
-            return True
-                
-        except Exception as e:
-            error_msg = str(e).lower()
-            if 'bot is not a member' in error_msg or 'chat not found' in error_msg:
-                logger.error(f"❌ Bot is not member/admin of channel {settings.required_channel_id}: {e}")
-                return True  # Allow access if bot permission issue
-            else:
-                logger.error(f"Error checking subscription for user {user_id}: {e}")
-                return True  # Allow access on unknown error
+        # Temporarily disabled - bot needs to be added as admin to channel first
+        logger.info(f"Subscription check disabled for user {user_id} - allowing access")
+        return True
 
     async def _handle_subscription_check(self, query) -> None:
         """Handle subscription check callback"""
