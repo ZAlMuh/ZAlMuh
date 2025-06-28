@@ -130,7 +130,7 @@ class BotHandlers:
     
     async def _show_main_menu(self, query) -> None:
         """Show main menu"""
-        await self._save_user_session(query.from_user.id, "main_menu")
+        self._save_user_session(query.from_user.id, "main_menu")
         await query.edit_message_text(
             self.messages.WELCOME_MESSAGE,
             reply_markup=self.keyboards.main_menu()
@@ -344,7 +344,7 @@ class BotHandlers:
         )
         
         # Reset user session
-        await self._save_user_session(query.from_user.id, "main_menu")
+        self._save_user_session(query.from_user.id, "main_menu")
     
     async def _show_student_result_from_message(self, update: Update, examno: str) -> None:
         """Show student result from text message"""
@@ -381,7 +381,7 @@ class BotHandlers:
         )
         
         # Reset user session
-        await self._save_user_session(update.effective_user.id, "main_menu")
+        self._save_user_session(update.effective_user.id, "main_menu")
     
     async def _share_result(self, query, examno: str) -> None:
         """Handle result sharing"""
@@ -441,7 +441,7 @@ class BotHandlers:
                 reply_markup=self.keyboards.back_to_main_keyboard()
             )
 
-    async def _save_user_session(self, user_id: int, state: str, history: dict = None) -> None:
+    def _save_user_session(self, user_id: int, state: str, history: dict = None) -> None:
         """Save user session state"""
         try:
             session = UserSession(
@@ -487,7 +487,9 @@ class BotHandlers:
             
             # First check if bot is admin in the channel
             try:
-                bot_member = await bot.get_chat_member(settings.required_channel_id, bot.id)
+                # Get bot info to get the ID
+                bot_info = await bot.get_me()
+                bot_member = await bot.get_chat_member(settings.required_channel_id, bot_info.id)
                 if bot_member.status not in ['creator', 'administrator']:
                     logger.warning(f"⚠️ Bot is not admin in channel {settings.required_channel_id}")
             except Exception as admin_check_error:
