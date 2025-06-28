@@ -43,8 +43,13 @@ class Settings(BaseSettings):
     najah_api_base_url: str = os.getenv("NAJAH_API_BASE_URL", "https://serapi3.najah.iq")
     
     # Rate Limiting
-    max_requests_per_minute: int = int(os.getenv("MAX_REQUESTS_PER_MINUTE", "3"))
+    max_requests_per_minute: int = int(os.getenv("MAX_REQUESTS_PER_MINUTE", "6"))
     cache_ttl_seconds: int = int(os.getenv("CACHE_TTL_SECONDS", "3600"))
+    
+    # Mandatory Channel Subscription
+    required_channel_id: str = os.getenv("REQUIRED_CHANNEL_ID", "-1001639586241")
+    required_channel_username: str = os.getenv("REQUIRED_CHANNEL_USERNAME", "@daralaarji")
+    required_channel_title: str = os.getenv("REQUIRED_CHANNEL_TITLE", "دار الاعرجي")
     
     # Environment
     environment: str = os.getenv("ENVIRONMENT", "development")

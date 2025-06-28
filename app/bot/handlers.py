@@ -31,8 +31,19 @@ class BotHandlers:
             user = update.effective_user
             logger.info(f"Start command from user {user.id} on shard {self.shard_id}")
             
+            # Check channel subscription first
+            if not await self._check_channel_subscription(user.id):
+                await update.message.reply_text(
+                    self.messages.SUBSCRIPTION_REQUIRED.format(
+                        channel_title=settings.required_channel_title,
+                        channel_username=settings.required_channel_username
+                    ),
+                    reply_markup=self.keyboards.subscription_required_keyboard(settings.required_channel_username)
+                )
+                return
+            
             # Save user session
-            await self._save_user_session(user.id, "main_menu")
+            self._save_user_session(user.id, "main_menu")
             
             await update.message.reply_text(
                 self.messages.WELCOME_MESSAGE,
@@ -75,6 +86,8 @@ class BotHandlers:
             elif data.startswith("share_"):
                 examno = data[6:]
                 await self._share_result(query, examno)
+            elif data == "check_subscription":
+                await self._handle_subscription_check(query)
             else:
                 await query.edit_message_text(
                     "خيار غير صحيح",
@@ -131,26 +144,39 @@ class BotHandlers:
     
     async def _start_name_search(self, query) -> None:
         """Start name search process - first show governorates"""
-        # Get governorates for selection
-        governorates = supabase_client.get_governorates()
-        if not governorates:
+        # Check subscription
+        if not await self._check_channel_subscription(query.from_user.id):
             await query.edit_message_text(
-                self.messages.DATABASE_ERROR,
-                reply_markup=self.keyboards.main_menu()
+                self.messages.SUBSCRIPTION_REQUIRED.format(
+                    channel_title=settings.required_channel_title,
+                    channel_username=settings.required_channel_username
+                ),
+                reply_markup=self.keyboards.subscription_required_keyboard(settings.required_channel_username)
             )
             return
-        
+            
         # Set state to waiting for governorate selection
         self._save_user_session(query.from_user.id, "waiting_governorate")
         
         await query.edit_message_text(
             "🏛️ اختر المحافظة أولاً لتقليل النتائج المكررة:",
-            reply_markup=self.keyboards.governorates_keyboard(governorates)
+            reply_markup=self.keyboards.governorates_keyboard()
         )
     
     async def _start_examno_search(self, query) -> None:
         """Start exam number search process"""
-        await self._save_user_session(query.from_user.id, "waiting_examno")
+        # Check subscription
+        if not await self._check_channel_subscription(query.from_user.id):
+            await query.edit_message_text(
+                self.messages.SUBSCRIPTION_REQUIRED.format(
+                    channel_title=settings.required_channel_title,
+                    channel_username=settings.required_channel_username
+                ),
+                reply_markup=self.keyboards.subscription_required_keyboard(settings.required_channel_username)
+            )
+            return
+            
+        self._save_user_session(query.from_user.id, "waiting_examno")
         await query.edit_message_text(
             self.messages.EXAMNO_SEARCH_PROMPT,
             reply_markup=self.keyboards.back_to_main_keyboard()
@@ -465,6 +491,39 @@ class BotHandlers:
             )
         except Exception:
             pass
+
+    async def _check_channel_subscription(self, user_id: int) -> bool:
+        """Check if user is subscribed to required channel"""
+        try:
+            if self.bot_manager:
+                # Single interface mode - use primary bot
+                bot = self.bot_manager.get_response_bot(user_id)
+            else:
+                # Traditional mode - use context bot
+                from telegram.ext import ContextTypes
+                bot = ContextTypes.DEFAULT_TYPE.bot
+                
+            member = await bot.get_chat_member(settings.required_channel_id, user_id)
+            return member.status in ['member', 'administrator', 'creator']
+        except Exception as e:
+            logger.error(f"Error checking subscription for user {user_id}: {e}")
+            return False  # If error, require subscription
+
+    async def _handle_subscription_check(self, query) -> None:
+        """Handle subscription check callback"""
+        try:
+            user_id = query.from_user.id
+            
+            if await self._check_channel_subscription(user_id):
+                await query.edit_message_text(
+                    self.messages.SUBSCRIPTION_SUCCESS,
+                    reply_markup=self.keyboards.main_menu()
+                )
+            else:
+                await query.answer(self.messages.SUBSCRIPTION_FAILED, show_alert=True)
+        except Exception as e:
+            logger.error(f"Error handling subscription check: {e}")
+            await query.answer("❌ خطأ في التحقق من الاشتراك", show_alert=True)
 
 
 class TelegramBotManager:

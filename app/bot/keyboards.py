@@ -18,15 +18,25 @@ class ArabicKeyboards:
         return InlineKeyboardMarkup(keyboard)
     
     @staticmethod
-    def governorates_keyboard(governorates: List[str]) -> InlineKeyboardMarkup:
-        """Governorates selection keyboard"""
+    def governorates_keyboard(governorates: List[str] = None) -> InlineKeyboardMarkup:
+        """Governorates selection keyboard with predefined order"""
         keyboard = []
         
+        # Predefined governorate order
+        ordered_governorates = [
+            "الرصافة الأولى", "الرصافة الثانية", "الرصافة الثالثة",
+            "الكرخ الأولى", "الكرخ الثانية", "الكرخ الثالثة", 
+            "كربلاء", "ذي قار", "ميسان", "البصرة",
+            "صلاح الدين", "ديالى", "القادسية", "كركوك",
+            "واسط", "المثنى", "بابل", "الأنبار",
+            "السليمانية", "دهوك", "أربيل", "النجف"
+        ]
+        
         # Add governorates in rows of 2
-        for i in range(0, len(governorates), 2):
+        for i in range(0, len(ordered_governorates), 2):
             row = []
-            for j in range(i, min(i + 2, len(governorates))):
-                gov = governorates[j]
+            for j in range(i, min(i + 2, len(ordered_governorates))):
+                gov = ordered_governorates[j]
                 row.append(InlineKeyboardButton(gov, callback_data=f"gov_{gov}"))
             keyboard.append(row)
         
@@ -129,6 +139,19 @@ class ArabicKeyboards:
             [
                 InlineKeyboardButton("🔄 إعادة المحاولة", callback_data="main_menu"),
                 InlineKeyboardButton("🏠 القائمة الرئيسية", callback_data="main_menu")
+            ]
+        ]
+        return InlineKeyboardMarkup(keyboard)
+    
+    @staticmethod
+    def subscription_required_keyboard(channel_username: str) -> InlineKeyboardMarkup:
+        """Keyboard for mandatory channel subscription"""
+        keyboard = [
+            [
+                InlineKeyboardButton("📢 اشتراك في القناة", url=f"https://t.me/{channel_username.replace('@', '')}")
+            ],
+            [
+                InlineKeyboardButton("✅ تم الاشتراك - تحقق", callback_data="check_subscription")
             ]
         ]
         return InlineKeyboardMarkup(keyboard)
