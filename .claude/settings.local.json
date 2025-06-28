@@ -3,7 +3,10 @@
     "allow": [
       "WebFetch(domain:docs.anthropic.com)",
       "Bash(ls:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(git pull:*)",
+      "Bash(git config:*)",
+      "Bash(git add:*)"
     ],
     "deny": []
   }
