@@ -497,7 +497,7 @@ class BotHandlers:
         try:
             if self.bot_manager:
                 # Single interface mode - use primary bot
-                bot = self.bot_manager.get_response_bot(user_id)
+                bot = await self.bot_manager.get_response_bot(user_id)
             else:
                 # Traditional mode - use context bot
                 from telegram.ext import ContextTypes
