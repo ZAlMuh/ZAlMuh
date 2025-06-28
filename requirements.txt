@@ -3,7 +3,7 @@ uvicorn[standard]
 python-telegram-bot
 supabase
 redis
-pydantic
+pydantic-settings
 python-dotenv
 sqlalchemy
 psycopg2-binary
