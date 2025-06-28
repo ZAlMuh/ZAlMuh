@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     environment: str = os.getenv("ENVIRONMENT", "development")
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
     
-    model_config = {"env_file": ".env", "case_sensitive": False}
+    model_config = {"env_file": ".env", "case_sensitive": False, "extra": "allow"}
 
     @property
     def active_bot_tokens(self) -> List[str]:
