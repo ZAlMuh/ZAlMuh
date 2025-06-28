@@ -33,13 +33,7 @@ class BotHandlers:
             
             # Check channel subscription first
             if not await self._check_channel_subscription(user.id):
-                await update.message.reply_text(
-                    self.messages.SUBSCRIPTION_REQUIRED.format(
-                        channel_title=settings.required_channel_title,
-                        channel_username=settings.required_channel_username
-                    ),
-                    reply_markup=self.keyboards.subscription_required_keyboard(settings.required_channel_username)
-                )
+                await self._send_subscription_message(update)
                 return
             
             # Save user session
@@ -146,13 +140,7 @@ class BotHandlers:
         """Start name search process - first show governorates"""
         # Check subscription
         if not await self._check_channel_subscription(query.from_user.id):
-            await query.edit_message_text(
-                self.messages.SUBSCRIPTION_REQUIRED.format(
-                    channel_title=settings.required_channel_title,
-                    channel_username=settings.required_channel_username
-                ),
-                reply_markup=self.keyboards.subscription_required_keyboard(settings.required_channel_username)
-            )
+            await self._send_subscription_message(query)
             return
             
         # Set state to waiting for governorate selection
@@ -167,13 +155,7 @@ class BotHandlers:
         """Start exam number search process"""
         # Check subscription
         if not await self._check_channel_subscription(query.from_user.id):
-            await query.edit_message_text(
-                self.messages.SUBSCRIPTION_REQUIRED.format(
-                    channel_title=settings.required_channel_title,
-                    channel_username=settings.required_channel_username
-                ),
-                reply_markup=self.keyboards.subscription_required_keyboard(settings.required_channel_username)
-            )
+            await self._send_subscription_message(query)
             return
             
         self._save_user_session(query.from_user.id, "waiting_examno")
@@ -502,12 +484,36 @@ class BotHandlers:
                 # Traditional mode - use context bot
                 from telegram.ext import ContextTypes
                 bot = ContextTypes.DEFAULT_TYPE.bot
-                
+            
+            # First check if bot is admin in the channel
+            try:
+                bot_member = await bot.get_chat_member(settings.required_channel_id, bot.id)
+                if bot_member.status not in ['creator', 'administrator']:
+                    logger.warning(f"⚠️ Bot is not admin in channel {settings.required_channel_id}")
+            except Exception as admin_check_error:
+                logger.error(f"❌ Cannot check bot admin status: {admin_check_error}")
+                return True  # Allow access if can't check bot status
+            
+            # Check if user is member of the channel
             member = await bot.get_chat_member(settings.required_channel_id, user_id)
-            return member.status in ['member', 'administrator', 'creator']
+            
+            # Member status: 'creator', 'administrator', 'member' = subscribed
+            # 'left', 'kicked' = not subscribed
+            if member.status in ['left', 'kicked']:
+                logger.info(f"User {user_id} not subscribed to channel (status: {member.status})")
+                return False
+            
+            logger.info(f"User {user_id} is subscribed to channel (status: {member.status})")
+            return True
+                
         except Exception as e:
-            logger.error(f"Error checking subscription for user {user_id}: {e}")
-            return False  # If error, require subscription
+            error_msg = str(e).lower()
+            if 'bot is not a member' in error_msg or 'chat not found' in error_msg:
+                logger.error(f"❌ Bot is not member/admin of channel {settings.required_channel_id}: {e}")
+                return True  # Allow access if bot permission issue
+            else:
+                logger.error(f"Error checking subscription for user {user_id}: {e}")
+                return True  # Allow access on unknown error
 
     async def _handle_subscription_check(self, query) -> None:
         """Handle subscription check callback"""
@@ -520,10 +526,63 @@ class BotHandlers:
                     reply_markup=self.keyboards.main_menu()
                 )
             else:
+                await self._send_subscription_message(query)
                 await query.answer(self.messages.SUBSCRIPTION_FAILED, show_alert=True)
         except Exception as e:
             logger.error(f"Error handling subscription check: {e}")
             await query.answer("❌ خطأ في التحقق من الاشتراك", show_alert=True)
+
+    async def _send_subscription_message(self, update_or_query) -> bool:
+        """Send subscription requirement message with inline buttons."""
+        try:
+            message_text = f"""🔒 عذراً، يجب الاشتراك في القناة التالية لاستخدام البوت:
+
+📢 قناة: {settings.required_channel_title}
+🆔 {settings.required_channel_username}
+
+💡 بعد الاشتراك، اضغط على 'تحقق من الاشتراك'"""
+            
+            keyboard = [
+                [InlineKeyboardButton(
+                    f"📢 اشترك في {settings.required_channel_title}", 
+                    url=f"https://t.me/{settings.required_channel_username.replace('@', '')}"
+                )],
+                [InlineKeyboardButton(
+                    "✅ تحقق من الاشتراك", 
+                    callback_data="check_subscription"
+                )]
+            ]
+            
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            # Handle both Update (message) and CallbackQuery objects
+            if hasattr(update_or_query, 'callback_query') and update_or_query.callback_query:
+                # This is an Update with callback_query
+                await update_or_query.callback_query.edit_message_text(
+                    message_text, 
+                    reply_markup=reply_markup
+                )
+            elif hasattr(update_or_query, 'edit_message_text'):
+                # This is a CallbackQuery object directly
+                await update_or_query.edit_message_text(
+                    message_text, 
+                    reply_markup=reply_markup
+                )
+            elif hasattr(update_or_query, 'message'):
+                # This is an Update object with a message
+                await update_or_query.message.reply_text(
+                    message_text, 
+                    reply_markup=reply_markup
+                )
+            else:
+                logger.error(f"❌ Unknown update type in send_subscription_message: {type(update_or_query)}")
+                return False
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Error sending subscription message: {e}")
+            return False
 
 
 class TelegramBotManager:

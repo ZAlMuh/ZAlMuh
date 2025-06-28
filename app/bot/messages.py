@@ -53,7 +53,7 @@ class ArabicMessages:
     # Rate limiting
     RATE_LIMIT_EXCEEDED = """⏰ تم تجاوز الحد المسموح
 يرجى الانتظار قبل إجراء بحث جديد
-الحد المسموح: 3 طلبات في الدقيقة"""
+الحد المسموح: 6 طلبات في الدقيقة"""
 
     # Error messages
     SYSTEM_ERROR = """❌ حدث خطأ في النظام
