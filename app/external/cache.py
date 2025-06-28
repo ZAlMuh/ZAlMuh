@@ -1,7 +1,7 @@
 import json
 import logging
 from typing import Optional, Dict, Any
-import aioredis
+import redis.asyncio as redis
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -9,12 +9,12 @@ logger = logging.getLogger(__name__)
 
 class RedisCache:
     def __init__(self):
-        self.redis: Optional[aioredis.Redis] = None
+        self.redis: Optional[redis.Redis] = None
     
     async def connect(self):
         """Connect to Redis"""
         try:
-            self.redis = aioredis.from_url(settings.redis_url, decode_responses=True)
+            self.redis = redis.from_url(settings.redis_url, decode_responses=True)
             await self.redis.ping()
             logger.info("Connected to Redis successfully")
         except Exception as e:

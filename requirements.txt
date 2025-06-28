@@ -7,7 +7,6 @@ pydantic-settings
 python-dotenv
 sqlalchemy
 psycopg2-binary
-aioredis
 python-multipart
 prometheus-client
 pytest
