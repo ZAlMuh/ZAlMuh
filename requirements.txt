@@ -3,7 +3,7 @@ uvicorn[standard]==0.23.2
 python-telegram-bot==20.6
 supabase==2.0.0
 redis==4.6.0
-httpx==0.24.1
+httpx>=0.25.0
 pydantic==1.10.12
 python-dotenv==1.0.0
 sqlalchemy==2.0.21
