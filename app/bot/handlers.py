@@ -391,21 +391,15 @@ class BotHandlers:
         self._save_user_session(update.effective_user.id, "main_menu")
     
     async def _share_result(self, query, examno: str) -> None:
-        """Handle result sharing"""
-        # Get student info for sharing
-        student = supabase_client.get_student_by_examno(examno)
-        if not student:
-            await query.answer("❌ خطأ في مشاركة النتيجة", show_alert=True)
-            return
-        
-        share_text = self.messages.get_sharing_message(student.aname, examno)
-        
+        """Handle result sharing - forward the message"""
         try:
-            # Send share message
-            await query.message.reply_text(share_text)
-            await query.answer("✅ تم تحضير رسالة المشاركة")
+            # Instead of creating a new message, provide instructions to forward
+            await query.answer(
+                "✅ لمشاركة النتيجة: اضغط على 'إعادة توجيه' في الرسالة أعلاه وأرسلها لمن تريد", 
+                show_alert=True
+            )
         except Exception as e:
-            logger.error(f"Error sharing result: {e}")
+            logger.error(f"Error in share result: {e}")
             await query.answer("❌ خطأ في المشاركة", show_alert=True)
     
     async def _check_rate_limit(self, user_id: int) -> bool:
@@ -483,9 +477,42 @@ class BotHandlers:
 
     async def _check_channel_subscription(self, user_id: int) -> bool:
         """Check if user is subscribed to required channel"""
-        # Temporarily disabled - bot needs to be added as admin to channel first
-        logger.info(f"Subscription check disabled for user {user_id} - allowing access")
-        return True
+        try:
+            # Get the bot instance to check membership
+            if self.bot_manager and hasattr(self.bot_manager, 'active_bots') and self.bot_manager.active_bots:
+                bot = self.bot_manager.active_bots[0]
+            else:
+                # Fallback: get bot from application
+                if hasattr(self, 'application') and self.application:
+                    bot = self.application.bot
+                else:
+                    logger.warning(f"No bot instance available for subscription check for user {user_id}")
+                    return True  # Allow access if we can't check
+            
+            # Check if user is member of the required channel
+            try:
+                member = await bot.get_chat_member(settings.required_channel_id, user_id)
+                # Allow if user is member, administrator, or creator
+                if member.status in ['member', 'administrator', 'creator']:
+                    logger.info(f"User {user_id} is subscribed to channel")
+                    return True
+                else:
+                    logger.info(f"User {user_id} is not subscribed to channel (status: {member.status})")
+                    return False
+            except Exception as e:
+                # If we get a "user not found" error, they're not subscribed
+                if "user not found" in str(e).lower() or "chat not found" in str(e).lower():
+                    logger.info(f"User {user_id} not found in channel - not subscribed")
+                    return False
+                else:
+                    logger.error(f"Error checking subscription for user {user_id}: {e}")
+                    # Allow access on API errors to avoid blocking users
+                    return True
+                    
+        except Exception as e:
+            logger.error(f"Error in subscription check for user {user_id}: {e}")
+            # Allow access on error to avoid blocking users
+            return True
 
     async def _handle_subscription_check(self, query) -> None:
         """Handle subscription check callback"""
@@ -596,7 +623,7 @@ class TelegramBotManager:
             application = Application.builder().token(token).build()
             
             # Create handlers for this shard
-            handlers = BotHandlers(shard_id)
+            handlers = BotHandlers(shard_id, bot_manager=self)
             
             # Add handlers
             application.add_handler(CommandHandler("start", handlers.start_command))
