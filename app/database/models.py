@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from pydantic import BaseModel
 from datetime import datetime
 
@@ -94,7 +94,7 @@ class RateLimit(BaseModel):
 
 
 class SearchResult(BaseModel):
-    students: list[Student]
+    students: List[Student]
     total_count: int
     has_more: bool
 
