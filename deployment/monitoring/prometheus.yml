@@ -1,0 +1,38 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  # Bot instances monitoring
+  - job_name: 'bot-shards'
+    static_configs:
+      - targets: 
+        - 'bot-shard-0:8000'
+        - 'bot-shard-1:8000'
+        - 'bot-shard-2:8000'
+        - 'bot-shard-3:8000'
+        - 'bot-shard-4:8000'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # Redis monitoring
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    scrape_interval: 30s
+
+  # Nginx monitoring
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx:80']
+    metrics_path: '/nginx_status'
+    scrape_interval: 15s
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

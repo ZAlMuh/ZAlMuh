@@ -1,6 +1,7 @@
 {
   "permissions": {
     "allow": [
+<<<<<<< HEAD
       "Bash(npm create vite@latest yna-news-agency -- --template react-ts)",
       "Bash(npm install)",
       "Bash(npm install:*)",
@@ -12,6 +13,21 @@
       "Bash(cat:*)",
       "Bash(npm run dev:*)",
       "Bash(npm run preview:*)"
+=======
+      "WebFetch(domain:docs.anthropic.com)",
+      "Bash(ls:*)",
+      "Bash(mkdir:*)",
+      "Bash(git pull:*)",
+      "Bash(git config:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "Bash(curl:*)",
+      "Bash(rg:*)",
+      "Bash(pip3 list:*)"
+>>>>>>> 3997fd018cda7bded22cd1c3072c90bd1844495f
     ],
     "deny": []
   }

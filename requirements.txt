@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+python-telegram-bot
+supabase
+redis
+pydantic-settings
+python-dotenv
+sqlalchemy
+psycopg2-binary
+python-multipart
+prometheus-client
+pytest
+pytest-asyncio

@@ -1,0 +1,71 @@
+services:
+  - type: web
+    name: arabic-telegram-bot
+    env: python
+    plan: starter  # or starter plus for better performance
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: ENVIRONMENT
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      # Add your bot tokens
+      - key: BOT_TOKEN_MAIN
+        value: 5036504214:AAF4cZR-mvu-Q8z_WQYQaLmbzw-R2sybKFM
+      - key: BOT_TOKEN_1
+        value: 7199941836:AAGc4YhuG93HgSYWYNVUbdf3VsqkF2Nhl9U
+      - key: BOT_TOKEN_2
+        value: 6895814597:AAHtDIi6GGMWN_G9hvg-QmIcB5iX_aNm8WA
+      - key: BOT_TOKEN_3
+        value: 7005162458:AAHBRGZWdpscVzccmXGBkJCgjQ5xrDimS0Q
+      - key: BOT_TOKEN_4
+        value: 6475702281:AAHIZIhiA4OY52WRBziRBrwrzRLRtl2OXzg
+      - key: BOT_TOKEN_5
+        value: 7675746275:AAHu25CkfZP7KSE4SADObkm9-xrbYxflU48
+      - key: BOT_TOKEN_6
+        value: 7435789657:AAHsrY-e6X9hmpRfDNhN1RJRREjYOz4xrq0
+      - key: BOT_TOKEN_7
+        value: 7404095541:AAE9vfkvXxlxqmX21XgAs8Kz8ZG5d5j3Ujg
+      - key: BOT_TOKEN_8
+        value: 6537125068:AAGvZgiVm1qRofumnwFnJ7_YIKd9AemehUs
+      - key: BOT_TOKEN_9
+        value: 7645073760:AAEfGPb6VaCDDzHw6w7dPSpX5tu3FzgoT7M
+      - key: BOT_TOKEN_10
+        value: 6636093163:AAFkebglqvrIOmZUfbqVqiKoBZc02sjW9a8
+      - key: BOT_TOKEN_11
+        value: 6499811600:AAFzLLBG8tCxW2hXyoZCjsuHpL3Unh6VvGk
+      - key: BOT_TOKEN_12
+        value: 7811073864:AAFHaqMyKR6y1q3B1cqJ7aMy-nzimDEdrnU
+      - key: BOT_TOKEN_13
+        value: 6387793169:AAHX6e1QJWdMeizxRUOrBw-tcVSHGu4jzos
+      - key: BOT_TOKEN_14
+        value: 7865730193:AAGfzgensrHnK9_NFnGYh-jEYtGihkNBJ9M
+      - key: BOT_TOKEN_15
+        value: 7595720964:AAF4yBfn36wuyfbDjMVk54fTQvAOGvr_8MA
+      - key: BOT_TOKEN_16
+        value: 7899892308:AAHUN4raPCRY_Sje9CfJw0cVloypNjoiIzQ
+      # Add your Supabase credentials
+      - key: SUPABASE_URL
+        value: YOUR_SUPABASE_URL_HERE
+      - key: SUPABASE_KEY
+        value: YOUR_SUPABASE_ANON_KEY_HERE
+      # Redis - we'll use an internal Redis or external service
+      - key: REDIS_URL
+        value: redis://localhost:6379
+      # External API
+      - key: NAJAH_API_BASE_URL
+        value: https://serapi3.najah.iq
+      # Rate limiting
+      - key: MAX_REQUESTS_PER_MINUTE
+        value: 3
+      - key: CACHE_TTL_SECONDS
+        value: 3600
+
+  # Redis service (if using Render's Redis)
+  - type: redis
+    name: arabic-bot-redis
+    plan: starter
+    maxmemoryPolicy: allkeys-lru
